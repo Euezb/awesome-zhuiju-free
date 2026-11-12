@@ -1,7 +1,7 @@
 name: Sync upstream
 on:
   schedule:
-    - cron: "0 3 * * *"   # 每天 03:00 UTC = 北京 11:00，错开上游 09:00 的检测
+    - cron: "0 3 * * *"
   workflow_dispatch:
 permissions:
   contents: write
@@ -15,20 +15,25 @@ jobs:
       - name: Checkout fork
         uses: actions/checkout@v6
         with: {ref: main, fetch-depth: 0}
+      - name: Probe write access
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          ref="refs/heads/sync-probe-$$"
+          git push origin "HEAD:${ref}"
+          git push origin --delete "${ref#refs/heads/}"
+          echo "写权限正常"
       - name: Add upstream remote
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git remote add upstream https://github.com/laoma528/awesome-zhuiju-free.git
-          git fetch --no-tags upstream main
+          git fetch --no-tags upstream +refs/heads/main:refs/remotes/upstream/main
+          git log --oneline -1 upstream/main
       - name: Rebase onto upstream and push
         run: |
           if git merge-base --is-ancestor upstream/main HEAD; then
-            echo "upstream 没有新提交，跳过"; exit 0
+            echo "upstream 没有新提交，跳过"
+            exit 0
           fi
           git rebase upstream/main
           git push --force-with-lease origin HEAD:main
-      - name: Mirror tags
-        run: |
-          git fetch --tags --force upstream
-          git push --force --tags origin
