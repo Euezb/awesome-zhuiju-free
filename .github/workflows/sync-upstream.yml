@@ -1,27 +1,42 @@
 name: Sync upstream
+
+# 把 laoma528/awesome-zhuiju-free 的最新提交拉到本 fork。
+# 本 fork 的 main 永远等于「上游 main + 这个 workflow 文件」这一个提交。
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "0 3 * * *"   # 每天 03:00 UTC = 北京 11:00，错开上游 09:00 的检测任务
   workflow_dispatch:
+
 permissions:
   contents: write
+
 concurrency:
   group: sync-upstream
   cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout fork
         uses: actions/checkout@v6
-        with: {ref: main, fetch-depth: 0}
-      - name: Probe write access
-        if: github.event_name == 'workflow_dispatch'
+        with:
+          ref: main
+          fetch-depth: 0
+          # 设置了 SYNC_TOKEN 就用它（能推送 .github/workflows 下的改动），
+          # 没设置就退回默认的 GITHUB_TOKEN。
+          token: ${{ secrets.SYNC_TOKEN || github.token }}
+
+      - name: Check token scope
+        env:
+          HAS_SYNC_TOKEN: ${{ secrets.SYNC_TOKEN != '' }}
         run: |
-          ref="refs/heads/sync-probe-$$"
-          git push origin "HEAD:${ref}"
-          git push origin --delete "${ref#refs/heads/}"
-          echo "写权限正常"
+          if [ "$HAS_SYNC_TOKEN" = "true" ]; then
+            echo "使用 SYNC_TOKEN：可以推送 .github/workflows 下的改动"
+          else
+            echo "::warning::未设置 SYNC_TOKEN，上游一旦修改 .github/workflows/ 下的文件，本次同步会被拒绝"
+          fi
+
       - name: Add upstream remote
         run: |
           git config user.name  "github-actions[bot]"
@@ -29,6 +44,7 @@ jobs:
           git remote add upstream https://github.com/laoma528/awesome-zhuiju-free.git
           git fetch --no-tags upstream +refs/heads/main:refs/remotes/upstream/main
           git log --oneline -1 upstream/main
+
       - name: Rebase onto upstream and push
         run: |
           if git merge-base --is-ancestor upstream/main HEAD; then
