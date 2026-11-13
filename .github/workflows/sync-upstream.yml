@@ -4,7 +4,7 @@ name: Sync upstream
 # 本 fork 的 main 永远等于「上游 main + 这个 workflow 文件」这一个提交。
 on:
   schedule:
-    - cron: "0 3 * * *"   # 每天 03:00 UTC = 北京 11:00，错开上游 09:00 的检测任务
+    - cron: "23 */4 * * *"   # 每 4 小时一次，避开整点
   workflow_dispatch:
 
 permissions:
